@@ -8,7 +8,7 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, {
 });
 
 // Hugging Face API konfiguratsiyasi
-const HF_API_KEY = "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"; // Bu yerga o'z keyingizni qo'ying
+const HF_API_KEY = process.env.HF_API_KEY; // Bu yerga o'z keyingizni qo'ying
 const HF_API_URL =
   "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0";
 
