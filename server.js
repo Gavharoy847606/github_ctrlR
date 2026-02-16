@@ -1,21 +1,47 @@
 import TelegramBot from "node-telegram-bot-api";
+import express from "express";
 import 'dotenv/config'
 import axios from "axios";
 import fs from "fs";
+
+// Express app yaratish
+const app = express();
+const PORT =  7779;
 
 const bot = new TelegramBot(process.env.BOT_TOKEN, {
   polling: true,
 });
 
 // Hugging Face API konfiguratsiyasi
-const HF_API_KEY = process.env.HF_API_KEY; // Bu yerga o'z keyingizni qo'ying
+const HF_API_KEY = process.env.HF_API_KEY;
 const HF_API_URL =
-  "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0";
+  "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0";
 
 const botwithAi = [{ key: "images", label: "🖼 Suratlar" }];
 
 // Foydalanuvchi holatini saqlash
 const userStates = {};
+
+// Express middleware
+app.use(express.json());
+
+// Health check endpoint
+app.get("/", (req, res) => {
+  res.json({
+    status: "ok",
+    message: "Bot ishlamoqda",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Bot status endpoint
+app.get("/status", (req, res) => {
+  res.json({
+    bot: "active",
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+  });
+});
 
 // Keyboard yasash funksiyasi
 function buildKeyboard(options) {
@@ -71,13 +97,12 @@ async function generateImage(chatId, prompt) {
       headers: {
         Authorization: `Bearer ${HF_API_KEY}`,
         "Content-Type": "application/json",
-        Accept: "image/png", // Bu qator qo'shildi - muhim!
       },
       data: {
         inputs: prompt,
       },
-      responseType: "arraybuffer", // Rasm ma'lumotlarini olish uchun
-      timeout: 60000, // 60 soniya timeout
+      responseType: "arraybuffer",
+      timeout: 60000,
     });
 
     // Rasmni faylga saqlash
@@ -99,7 +124,6 @@ async function generateImage(chatId, prompt) {
   } catch (error) {
     console.error("Xatolik:", error.message);
 
-    // Agar error response buffer bo'lsa, uni stringga o'tkazish
     let errorMessage = "❌ Texnik nosozlik yuzaga keldi.";
 
     if (error.response?.data) {
@@ -109,7 +133,6 @@ async function generateImage(chatId, prompt) {
           : JSON.stringify(error.response.data);
         console.error("API xatoligi:", errorText);
 
-        // Xatolik turini aniqlash
         if (
           errorText.includes("currently loading") ||
           errorText.includes("is currently loading")
@@ -124,7 +147,6 @@ async function generateImage(chatId, prompt) {
       }
     }
 
-    // Status code bo'yicha xatoliklarni qayta ishlash
     if (error.response?.status === 401) {
       errorMessage = "❌ API key noto'g'ri yoki yaroqsiz!";
     } else if (error.response?.status === 503) {
@@ -149,12 +171,10 @@ bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text;
 
-  // Buyruqlarni o'tkazib yuborish
   if (text && text.startsWith("/")) {
     return;
   }
 
-  // Keyboard tugmalarini qayta ishlash
   if (text === "🖼 Suratlar") {
     userStates[chatId] = "waiting_for_image_prompt";
     bot.sendMessage(
@@ -164,7 +184,6 @@ bot.on("message", async (msg) => {
     return;
   }
 
-  // Agar foydalanuvchi surat uchun matn kutayotgan bo'lsa
   if (userStates[chatId] === "waiting_for_image_prompt") {
     await generateImage(chatId, text);
     return;
@@ -176,4 +195,31 @@ bot.on("message", async (msg) => {
   }
 });
 
-console.log("🤖 Bot ishga tushdi...");
+// Polling xatolarini qayta ishlash
+bot.on("polling_error", (error) => {
+  console.error("Polling xatoligi:", error.message);
+  
+  if (error.message.includes("409 Conflict")) {
+    console.log("⚠️ Bot allaqachon boshqa joyda ishlamoqda!");
+    process.exit(1);
+  }
+});
+
+// Express serverni ishga tushirish
+app.listen(PORT, () => {
+  console.log(`🌐 Express server ${PORT} portda ishlamoqda`);
+  console.log(`🤖 Telegram bot ishga tushdi...`);
+});
+
+// Graceful shutdown
+process.once('SIGINT', () => {
+  console.log('Bot va server to\'xtatilmoqda...');
+  bot.stopPolling();
+  process.exit(0);
+});
+
+process.once('SIGTERM', () => {
+  console.log('Bot va server to\'xtatilmoqda...');
+  bot.stopPolling();
+  process.exit(0);
+});
