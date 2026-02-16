@@ -15,7 +15,7 @@ const bot = new TelegramBot(process.env.BOT_TOKEN, {
 // Hugging Face API konfiguratsiyasi
 const HF_API_KEY = process.env.HF_API_KEY;
 const HF_API_URL =
-  "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0";
+  "https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-xl-base-1.0";
 
 const botwithAi = [{ key: "images", label: "🖼 Suratlar" }];
 
